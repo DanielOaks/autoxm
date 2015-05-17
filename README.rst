@@ -7,7 +7,7 @@ This is based off the `autotracker.py` project from Ben "GreaseMonkey" Russell, 
 
 Credits
 -------
-Project was inspired by `autotracker-bottomup` from Ben "GreaseMonkey" Russell.
+Project was inspired by `autotracker-bottomup` from Ben "GreaseMonkey" Russell, and includes code from that script.
 
 `.xm` file specifications from Mr.H of Triton, with corrections and expansions from ByteRaver & Wodan of TNT / NO-ID, Guru and Alfred of Sahara Surfers, and the uFMOD project.
 
