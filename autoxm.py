@@ -3,9 +3,10 @@
 # written by Daniel Oaks <daniel@danieloaks.net>
 # released into the public domain
 # inspired by the public domain autotracker by Ben "GreaseMonkey" Russell
+#   and uses code from that script
 import struct, random
 
-from musthe import scale, Note, Interval, Chord
+# from musthe import scale, Note, Interval, Chord
 
 # XM Module Handling
 #
