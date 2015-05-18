@@ -313,7 +313,7 @@ class XmEnvelope:
 
 
 class XmSample:
-    def __init__(self, name='', relative_note=0, length=0, filtl=1, filth=0):
+    def __init__(self, name='', relative_note=0, length=0, filtl=0, filth=1):
         """Stores an XM instrument sample.
 
         Arguments:
@@ -345,6 +345,19 @@ class XmSample:
         self.filth = filth
 
         self.packing_type = XM_SAMPLE_PACKING_NONE
+
+    def clear(self):
+        self.data = []
+        self.ql = 0
+        self.qh = 0
+
+    def add_sample(self, val, filter=True):
+        if filter:
+            self.ql += (val - self.ql) * self.filtl
+            self.qh += (val - self.qh) * self.filth
+            val = self.ql - self.qh
+
+        self.data.append(val)
 
     def generate(self):
         raise Exception("The generate() function must be overridden in subclasses!")
@@ -478,10 +491,7 @@ class NoiseSample(XmSample):
         self.pattern = pattern
 
     def generate(self):
-        self.data = []
-
-        ql = 0
-        qh = 0
+        self.clear()
 
         for i in range(self.sample_count):
             if self.pattern == 'gauss':
@@ -493,11 +503,7 @@ class NoiseSample(XmSample):
             else:
                 val = random.random() * 2 - 1
 
-            ql += (val - ql) * self.filtl
-            qh += (val - qh) * self.filth
-            val = ql - qh
-
-            self.data.append(val)
+            self.add_sample(val)
 
 
 class NoiseHit(XmInstrument):
@@ -516,7 +522,7 @@ class KsSample(XmSample):
         self.loop_type = XM_LOOP_FORWARD
 
     def generate(self):
-        self.data = []
+        self.clear()
 
         # variables
         freq = MIDDLE_C
@@ -550,19 +556,18 @@ class KsSample(XmSample):
 
             if i < period:
                 # gaussian sounds better than completely random for this
-                rand = random.gauss(0, 0.3)
-                if rand < -1:
-                    rand = -1
-                elif rand > 1:
-                    rand = 1
-                self.data.append(rand)
+                val = random.gauss(0, 0.3)
+                if val < -1:
+                    val = -1
+                elif val > 1:
+                    val = 1
             else:
                 pos = i - period
 
                 val = ((1 - stretch) * self.data[pos]) + (stretch * self.data[pos - 1])
                 val *= loss_factor
 
-                self.data.append(val)
+            self.add_sample(val)
 
         # set loop
         self.loop_start = self.sample_count - period
@@ -728,14 +733,14 @@ def autoxm(name=None, tempo=None):
 if __name__ == '__main__':
     chiptune = autoxm()
 
+    string = KsInstrument('string', length=2, fadeout=6, filtl=0, filth=1)
+    chiptune.add_instrument(string)
+
     bassdrum = NoiseHit('bassdrum', relative_note=XM_RELATIVE_OCTAVEDOWN - 6, fadeout=0.4, filtl=0.13, filth=0.75)
     chiptune.add_instrument(bassdrum)
 
-    snare = NoiseHit('snare', fadeout=0.2, filtl=0.2, filth=0.9)
+    snare = NoiseHit('snare', fadeout=0.2, filtl=0.17, filth=0.88)
     chiptune.add_instrument(snare)
-
-    string = KsInstrument('string', length=2, fadeout=6)
-    chiptune.add_instrument(string)
 
     pattern = XmPattern()
     chiptune.add_pattern_to_order(pattern)
