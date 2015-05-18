@@ -15,6 +15,7 @@ import struct, random
 XM_TRACKER_NAME = 'AutoXM'
 XM_ID_TEXT = 'Extended Module: '
 XM_VERSION = 0x0104
+XM_ENVELOPE_FREQ = 50
 XM_SAMPLE_FREQ = 8363  # assuming C-4, good enough
 
 XM_RELATIVE_OCTAVEUP = 12
@@ -41,6 +42,8 @@ XM_ENV_LOOP = 0x2
 XM_LOOP_NONE = 0x0
 XM_LOOP_FORWARD = 0x1
 XM_LOOP_PINGPONG = 0x2
+
+MIDDLE_C = 220.0 * (2.0 ** (3.0 / 12.0))
 
 
 # classes
@@ -310,15 +313,18 @@ class XmEnvelope:
 
 
 class XmSample:
-    def __init__(self, name='', relative_note=0):
+    def __init__(self, name='', relative_note=0, length=0):
         self.name = name
+
+        self.sample_length = length
+        self.sample_count = int(length * XM_SAMPLE_FREQ)
 
         self.bits = 8
         self.data = []
 
         self.loop_type = XM_LOOP_NONE
-        self.loop_start = None
-        self.loop_length = None
+        self.loop_start = 0
+        self.loop_length = 0
 
         self.volume = 0x40
         self.finetune = 0
@@ -350,7 +356,7 @@ class XmSample:
 class XmInstrument:
     sample_generator = None
 
-    def __init__(self, name='', *args, **kwargs):
+    def __init__(self, name='', fadeout=None, *args, **kwargs):
         self.name = name
 
         # samples
@@ -367,6 +373,14 @@ class XmInstrument:
         self.vibrato_rate = 0
 
         self.volume_fadeout = 0
+
+        # fadeout, envelope, defaults to linear
+        vol = 1
+
+        if fadeout:
+            self.volume_envelope.enable()
+            self.volume_envelope.add_point(0, vol)
+            self.volume_envelope.add_point(int(fadeout * XM_ENVELOPE_FREQ))
 
         # should suffice for most instruments
         if self.sample_generator:
@@ -432,7 +446,10 @@ class XmNote:
         return note
 
 
-# actual instruments themselves
+## Instruments
+#
+
+# noise
 class NoiseSample(XmSample):
     def __init__(self, name='noise', relative_note=0, length=1, pattern='gauss'):
         """Noise sample.
@@ -440,10 +457,7 @@ class NoiseSample(XmSample):
         Arguments:
             length (float): Length of the sample in seconds
         """
-        super().__init__(name='noise', relative_note=relative_note)
-
-        self.sample_length = length
-        self.sample_count = int(length * XM_SAMPLE_FREQ)
+        super().__init__(name=name, relative_note=relative_note, length=length)
 
         self.loop_start = 0
         self.loop_length = self.sample_count
@@ -454,7 +468,7 @@ class NoiseSample(XmSample):
     def generate(self):
         self.data = []
 
-        for i in range(self.sample_count - 1):
+        for i in range(self.sample_count):
             if self.pattern == 'gauss':
                 val = random.gauss(0, 0.3)
                 if val < -1:
@@ -470,17 +484,63 @@ class NoiseHit(XmInstrument):
     sample_generator = NoiseSample
 
     def __init__(self, name='noise', relative_note=0, length=1, fadeout=None):
-        super().__init__(name=name, relative_note=relative_note, length=1)
+        super().__init__(name=name, relative_note=relative_note, length=length, fadeout=fadeout)
 
-        vol = 1
 
-        if fadeout:
-            self.volume_envelope.enable()
-            self.volume_envelope.add_point(0, vol)
-            self.volume_envelope.add_point(fadeout)
+# Synth
+class KsSample(XmSample):
+    def __init__(self, name='string', relative_note=0, length=1):
+        """Karplus–Strong string synthesis."""
+        super().__init__(name=name, relative_note=relative_note, length=length)
+
+        self.loop_type = XM_LOOP_FORWARD
+
+    def generate(self):
+        self.data = []
+
+        # variables
+        freq = MIDDLE_C
+        decay = 0.02
+        # freq = MIDDLE_C / 2
+        # decay = 0.003
+
+        period = int(freq / 2)
+        loss_factor = 1 - decay
+        stretch = 0.3
+
+        # calculate stuff
+        for i in range(self.sample_count):
+            if i < period:
+                # gaussian sounds better than completely random for this
+                rand = random.gauss(0, 0.3)
+                if rand < -1:
+                    rand = -1
+                elif rand > 1:
+                    rand = 1
+                self.data.append(rand)
+            else:
+                pos = i - period
+
+                val = ((1 - stretch) * self.data[pos]) + (stretch * self.data[pos - 1])
+                val *= loss_factor
+
+                self.data.append(val)
+
+        # set loop
+        self.loop_start = self.sample_count - period
+        self.loop_length = period
+
+
+class KsInstrument(XmInstrument):
+    sample_generator = KsSample
+
+    def __init__(self, name='ks', relative_note=0, length=2, fadeout=None):
+        super().__init__(name=name, relative_note=relative_note, length=length, fadeout=fadeout)
 
 
 # Name Generation
+#
+
 # Taken from autotracker.py and extended
 def slugify(name):
     """Take a generated name, output an autoxm slug."""
@@ -630,11 +690,14 @@ def autoxm(name=None, tempo=None):
 if __name__ == '__main__':
     chiptune = autoxm()
 
-    bassdrum = NoiseHit('bassdrum', relative_note=XM_RELATIVE_OCTAVEDOWN - 6, fadeout=13)
+    bassdrum = NoiseHit('bassdrum', relative_note=XM_RELATIVE_OCTAVEDOWN - 6, fadeout=0.4)
     chiptune.add_instrument(bassdrum)
 
-    snare = NoiseHit('snare', fadeout=9)
+    snare = NoiseHit('snare', fadeout=0.2)
     chiptune.add_instrument(snare)
+
+    string = KsInstrument('string', length=2, fadeout=6)
+    chiptune.add_instrument(string)
 
     pattern = XmPattern()
     chiptune.add_pattern_to_order(pattern)
