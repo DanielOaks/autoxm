@@ -341,6 +341,8 @@ class XmSample:
         self.panning = 0  # -1 to 1
         self.relative_note = relative_note
 
+        self.boost = 1.0
+
         self.filtl = filtl
         self.filth = filth
 
@@ -362,20 +364,20 @@ class XmSample:
     def generate(self):
         raise Exception("The generate() function must be overridden in subclasses!")
 
-    # def amplify(self):
-    #     l = -0.0000000001
-    #     h = 0.0000000001
-    #     for v in self.data:#[len(self.data)//32:]:
-    #         if v < l:
-    #             l = v
-    #         if v > h:
-    #             h = v
+    def amplify(self):
+        low = -0.0000000001
+        high = 0.0000000001
 
-    #     amp = self.boost / max(-l,h)
-    #     #print amp
+        for val in self.data:
+            if val < low:
+                low = val
+            if val > high:
+                high = val
 
-    #     for i in xrange(len(self.data)):
-    #         self.data[i] *= amp
+        amp = self.boost / max(-low, high)
+
+        for i in range(len(self.data)):
+            self.data[i] *= amp
 
 
 class XmInstrument:
@@ -505,6 +507,8 @@ class NoiseSample(XmSample):
 
             self.add_sample(val)
 
+        self.amplify()
+
 
 class NoiseHit(XmInstrument):
     sample_generator = NoiseSample
@@ -515,7 +519,7 @@ class NoiseHit(XmInstrument):
 
 # Synth
 class KsSample(XmSample):
-    def __init__(self, name='ks string synth', **kwargs):
+    def __init__(self, name='ks synth', **kwargs):
         """Karplus–Strong string synthesis."""
         super().__init__(name=name, **kwargs)
 
@@ -534,44 +538,57 @@ class KsSample(XmSample):
         loss_factor = 1 - decay
         stretch = 0.3
 
+        # generate and center our random samples
+        noise = []
+        for i in range(period):
+            # gaussian sounds better than completely random for this
+            val = random.gauss(0, 0.3)
+
+            if val < -1:
+                val = -1
+            elif val > 1:
+                val = 1
+
+            noise.append(val)
+
+        avg = 0
+        count = 0
+        for j in range(period):
+            avg += noise[j]
+            count += 1
+        avg /= count
+
+        # correct for the bias
+        for j in range(len(noise)):
+            noise[j] = noise[j] - avg
+
+            if 1 < noise[j]:
+                noise[j] = 1
+            elif -1 > noise[j]:
+                noise[j] = -1
+
         # calculate stuff
         for i in range(self.sample_count):
-            # center our random samples
-            if i == period:
-                avg = 0
-                count = 0
-                for j in range(period):
-                    avg += self.data[j]
-                    count += 1
-                avg /= count
-
-                # and correct for the bias
-                for j in range(period):
-                    self.data[j] = self.data[j] - avg
-
-                    if 1 < self.data[j]:
-                        self.data[j] = 1
-                    elif -1 > self.data[j]:
-                        self.data[j] = -1
 
             if i < period:
-                # gaussian sounds better than completely random for this
-                val = random.gauss(0, 0.3)
-                if val < -1:
-                    val = -1
-                elif val > 1:
-                    val = 1
+                pos = i
+                data1 = noise[pos]
+                data2 = noise[pos - 1]
             else:
                 pos = i - period
+                data1 = self.data[pos]
+                data2 = self.data[pos - 1]
 
-                val = ((1 - stretch) * self.data[pos]) + (stretch * self.data[pos - 1])
-                val *= loss_factor
+            val = ((1 - stretch) * data1) + (stretch * data2)
+            val *= loss_factor
 
             self.add_sample(val)
 
         # set loop
         self.loop_start = self.sample_count - period
         self.loop_length = period
+
+        self.amplify()
 
 
 class KsInstrument(XmInstrument):
