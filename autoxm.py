@@ -313,7 +313,16 @@ class XmEnvelope:
 
 
 class XmSample:
-    def __init__(self, name='', relative_note=0, length=0):
+    def __init__(self, name='', relative_note=0, length=0, filtl=1, filth=0):
+        """Stores an XM instrument sample.
+
+        Arguments:
+            name (str): Name of the sample.
+            relative_note (int): Note change relative to C-4 (-1 would be B-4).
+            length (int): Length of the sample in seconds.
+            filtl (int): Low-pass filter, 0 to 1.
+            filth (int): High-pass filter, 0 to 1.
+        """
         self.name = name
 
         self.sample_length = length
@@ -331,6 +340,9 @@ class XmSample:
 
         self.panning = 0  # -1 to 1
         self.relative_note = relative_note
+
+        self.filtl = filtl
+        self.filth = filth
 
         self.packing_type = XM_SAMPLE_PACKING_NONE
 
@@ -356,7 +368,7 @@ class XmSample:
 class XmInstrument:
     sample_generator = None
 
-    def __init__(self, name='', fadeout=None, *args, **kwargs):
+    def __init__(self, name='', length=1, fadeout=None, *args, **kwargs):
         self.name = name
 
         # samples
@@ -384,7 +396,7 @@ class XmInstrument:
 
         # should suffice for most instruments
         if self.sample_generator:
-            self.samples.append(self.sample_generator(*args, **kwargs))
+            self.samples.append(self.sample_generator(length=length, *args, **kwargs))
 
     @property
     def sample_map(self):
@@ -468,6 +480,9 @@ class NoiseSample(XmSample):
     def generate(self):
         self.data = []
 
+        ql = 0
+        qh = 0
+
         for i in range(self.sample_count):
             if self.pattern == 'gauss':
                 val = random.gauss(0, 0.3)
@@ -477,6 +492,11 @@ class NoiseSample(XmSample):
                     val = 1
             else:
                 val = random.random() * 2 - 1
+
+            ql += (val - ql) * self.filtl
+            qh += (val - qh) * self.filth
+            val = ql - qh
+
             self.data.append(val)
 
 
@@ -489,7 +509,7 @@ class NoiseHit(XmInstrument):
 
 # Synth
 class KsSample(XmSample):
-    def __init__(self, name='string', **kwargs):
+    def __init__(self, name='ks string synth', **kwargs):
         """Karplus–Strong string synthesis."""
         super().__init__(name=name, **kwargs)
 
@@ -708,10 +728,10 @@ def autoxm(name=None, tempo=None):
 if __name__ == '__main__':
     chiptune = autoxm()
 
-    bassdrum = NoiseHit('bassdrum', relative_note=XM_RELATIVE_OCTAVEDOWN - 6, fadeout=0.4)
+    bassdrum = NoiseHit('bassdrum', relative_note=XM_RELATIVE_OCTAVEDOWN - 6, fadeout=0.4, filtl=0.13, filth=0.75)
     chiptune.add_instrument(bassdrum)
 
-    snare = NoiseHit('snare', fadeout=0.2)
+    snare = NoiseHit('snare', fadeout=0.2, filtl=0.2, filth=0.9)
     chiptune.add_instrument(snare)
 
     string = KsInstrument('string', length=2, fadeout=6)
