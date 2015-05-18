@@ -451,13 +451,13 @@ class XmNote:
 
 # noise
 class NoiseSample(XmSample):
-    def __init__(self, name='noise', relative_note=0, length=1, pattern='gauss'):
+    def __init__(self, name='noise', pattern='gauss', **kwargs):
         """Noise sample.
 
         Arguments:
             length (float): Length of the sample in seconds
         """
-        super().__init__(name=name, relative_note=relative_note, length=length)
+        super().__init__(name=name, **kwargs)
 
         self.loop_start = 0
         self.loop_length = self.sample_count
@@ -483,15 +483,15 @@ class NoiseSample(XmSample):
 class NoiseHit(XmInstrument):
     sample_generator = NoiseSample
 
-    def __init__(self, name='noise', relative_note=0, length=1, fadeout=None):
-        super().__init__(name=name, relative_note=relative_note, length=length, fadeout=fadeout)
+    def __init__(self, name='noise', **kwargs):
+        super().__init__(name=name, **kwargs)
 
 
 # Synth
 class KsSample(XmSample):
-    def __init__(self, name='string', relative_note=0, length=1):
+    def __init__(self, name='string', **kwargs):
         """Karplus–Strong string synthesis."""
-        super().__init__(name=name, relative_note=relative_note, length=length)
+        super().__init__(name=name, **kwargs)
 
         self.loop_type = XM_LOOP_FORWARD
 
@@ -552,8 +552,8 @@ class KsSample(XmSample):
 class KsInstrument(XmInstrument):
     sample_generator = KsSample
 
-    def __init__(self, name='ks', relative_note=0, length=2, fadeout=None):
-        super().__init__(name=name, relative_note=relative_note, length=length, fadeout=fadeout)
+    def __init__(self, name='ks', length=2, **kwargs):
+        super().__init__(name=name, length=length, **kwargs)
 
 
 # Name Generation
