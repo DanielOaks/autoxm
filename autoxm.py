@@ -17,6 +17,9 @@ XM_ID_TEXT = 'Extended Module: '
 XM_VERSION = 0x0104
 XM_SAMPLE_FREQ = 8363  # assuming C-4, good enough
 
+XM_RELATIVE_OCTAVEUP = 12
+XM_RELATIVE_OCTAVEDOWN = -12
+
 XM_SAMPLE_PACKING_NONE = 0x00
 XM_SAMPLE_PACKING_ADPCM = 0xAD
 
@@ -198,28 +201,35 @@ class XmFile:
                         sample_type |= XM_BITFLAGS_16BIT
 
                     sample_headers += struct.pack('<B', sample_type)
-                    sample_headers += struct.pack('<B', sample.panning + 128)
+                    sample_headers += struct.pack('<B', (sample.panning + 1) * 127)
                     sample_headers += struct.pack('<b', sample.relative_note)
                     sample_headers += struct.pack('<B', sample.packing_type)
                     sample_headers += self._get_padded(sample.name, 22)
 
                 # second part of instrument headers
                 if len(instrument.samples):
+                    instrument_data += struct.pack('<I', len(sample_headers))
+
                     for sample_number in instrument.sample_map:
                         instrument_data += struct.pack('<B', sample_number)
-                    for i in range(96):  # XXX - ignore volume and panning envelope for now
-                        instrument_data += struct.pack('<B', 0)
 
-                    instrument_data += struct.pack('<B', len(instrument.volume_envelope))
-                    instrument_data += struct.pack('<B', len(instrument.panning_envelope))
-                    instrument_data += struct.pack('<B', instrument.volume_sustain_point)
-                    instrument_data += struct.pack('<B', instrument.volume_loop_start_point)
-                    instrument_data += struct.pack('<B', instrument.volume_loop_end_point)
-                    instrument_data += struct.pack('<B', instrument.panning_sustain_point)
-                    instrument_data += struct.pack('<B', instrument.panning_loop_start_point)
-                    instrument_data += struct.pack('<B', instrument.panning_loop_end_point)
-                    instrument_data += struct.pack('<B', instrument.volume_type)
-                    instrument_data += struct.pack('<B', instrument.panning_type)
+                    for p in instrument.volume_envelope.padded_points:
+                        instrument_data += struct.pack('<H', p.x)
+                        instrument_data += struct.pack('<H', int(p.y * 0x40))
+                    for p in instrument.panning_envelope.padded_points:
+                        instrument_data += struct.pack('<H', p.x)
+                        instrument_data += struct.pack('<H', int(((p.y + 1) / 2) * 0x40))
+
+                    instrument_data += struct.pack('<B', len(instrument.volume_envelope.points))
+                    instrument_data += struct.pack('<B', len(instrument.panning_envelope.points))
+                    instrument_data += struct.pack('<B', instrument.volume_envelope.sustain_point)
+                    instrument_data += struct.pack('<B', instrument.volume_envelope.loop_start_point)
+                    instrument_data += struct.pack('<B', instrument.volume_envelope.loop_end_point)
+                    instrument_data += struct.pack('<B', instrument.panning_envelope.sustain_point)
+                    instrument_data += struct.pack('<B', instrument.panning_envelope.loop_start_point)
+                    instrument_data += struct.pack('<B', instrument.panning_envelope.loop_end_point)
+                    instrument_data += struct.pack('<B', instrument.volume_envelope.env_type)
+                    instrument_data += struct.pack('<B', instrument.panning_envelope.env_type)
                     instrument_data += struct.pack('<B', instrument.vibrato_type)
                     instrument_data += struct.pack('<B', instrument.vibrato_sweep)
                     instrument_data += struct.pack('<B', instrument.vibrato_depth)
@@ -255,8 +265,52 @@ class XmFile:
                     fp.write(sample_data)
 
 
+class XmEnvelopePoint:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+
+class XmEnvelope:
+    def __init__(self):
+        self.points = []
+
+        self.sustain_point = 0
+        self.loop_start_point = 0
+        self.loop_end_point = 0
+        self.env_type = XM_ENV_OFF
+
+    def enable(self, sustain=False, loop=False):
+        self.env_type = XM_ENV_ON
+        if sustain:
+            self.env_type |= XM_ENV_SUSTAIN
+        if loop:
+            self.env_type |= XM_ENV_LOOP
+
+    def disable(self):
+        self.env_type = XM_ENV_OFF
+
+    def clear(self):
+        self.points = []
+
+    def add_point(self, x, y=0):
+        self.points.append(XmEnvelopePoint(x, y))
+
+    @property
+    def padded_points(self):
+        points = []
+
+        for p in self.points:
+            points.append(p)
+
+        while len(points) < 12:
+            points.append(XmEnvelopePoint(0, 0))
+
+        return points
+
+
 class XmSample:
-    def __init__(self, name=''):
+    def __init__(self, name='', relative_note=0):
         self.name = name
 
         self.bits = 8
@@ -269,8 +323,8 @@ class XmSample:
         self.volume = 0x40
         self.finetune = 0
 
-        self.panning = 0  # -127 to 127
-        self.relative_note = 0
+        self.panning = 0  # -1 to 1
+        self.relative_note = relative_note
 
         self.packing_type = XM_SAMPLE_PACKING_NONE
 
@@ -304,17 +358,8 @@ class XmInstrument:
         self.sample_map = []
 
         # instrument info
-        self.volume_envelope = []
-        self.volume_sustain_point = 0
-        self.volume_loop_start_point = 0
-        self.volume_loop_end_point = 0
-        self.volume_type = XM_ENV_OFF
-
-        self.panning_envelope = []
-        self.panning_sustain_point = 0
-        self.panning_loop_start_point = 0
-        self.panning_loop_end_point = 0
-        self.panning_type = XM_ENV_OFF
+        self.volume_envelope = XmEnvelope()
+        self.panning_envelope = XmEnvelope()
 
         self.vibrato_type = XM_VIBRATO_NONE
         self.vibrato_sweep = 0
@@ -389,13 +434,13 @@ class XmNote:
 
 # actual instruments themselves
 class NoiseSample(XmSample):
-    def __init__(self, name='noise', length=1, pattern='gauss'):
+    def __init__(self, name='noise', relative_note=0, length=1, pattern='gauss'):
         """Noise sample.
 
         Arguments:
             length (float): Length of the sample in seconds
         """
-        super().__init__(name='noise')
+        super().__init__(name='noise', relative_note=relative_note)
 
         self.sample_length = length
         self.sample_count = int(length * XM_SAMPLE_FREQ)
@@ -424,8 +469,15 @@ class NoiseSample(XmSample):
 class NoiseHit(XmInstrument):
     sample_generator = NoiseSample
 
-    def __init__(self, name='noise', length=1):
-        super().__init__(name='noise', length=1)
+    def __init__(self, name='noise', relative_note=0, length=1, fadeout=None):
+        super().__init__(name=name, relative_note=relative_note, length=1)
+
+        vol = 1
+
+        if fadeout:
+            self.volume_envelope.enable()
+            self.volume_envelope.add_point(0, vol)
+            self.volume_envelope.add_point(fadeout)
 
 
 # Name Generation
@@ -578,8 +630,11 @@ def autoxm(name=None, tempo=None):
 if __name__ == '__main__':
     chiptune = autoxm()
 
-    inst = NoiseHit('testestest')
-    chiptune.add_instrument(inst)
+    bassdrum = NoiseHit('bassdrum', relative_note=XM_RELATIVE_OCTAVEDOWN - 6, fadeout=13)
+    chiptune.add_instrument(bassdrum)
+
+    snare = NoiseHit('snare', fadeout=9)
+    chiptune.add_instrument(snare)
 
     pattern = XmPattern()
     chiptune.add_pattern_to_order(pattern)
