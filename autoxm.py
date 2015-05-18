@@ -510,6 +510,24 @@ class KsSample(XmSample):
 
         # calculate stuff
         for i in range(self.sample_count):
+            # center our random samples
+            if i == period:
+                avg = 0
+                count = 0
+                for j in range(period):
+                    avg += self.data[j]
+                    count += 1
+                avg /= count
+
+                # and correct for the bias
+                for j in range(period):
+                    self.data[j] = self.data[j] - avg
+
+                    if 1 < self.data[j]:
+                        self.data[j] = 1
+                    elif -1 > self.data[j]:
+                        self.data[j] = -1
+
             if i < period:
                 # gaussian sounds better than completely random for this
                 rand = random.gauss(0, 0.3)
