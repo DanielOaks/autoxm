@@ -753,8 +753,11 @@ if __name__ == '__main__':
     string = KsInstrument('string', length=2, fadeout=6, filtl=0, filth=1)
     chiptune.add_instrument(string)
 
-    bassdrum = NoiseHit('bassdrum', relative_note=XM_RELATIVE_OCTAVEDOWN - 6, fadeout=0.4, filtl=0.13, filth=0.75)
-    chiptune.add_instrument(bassdrum)
+    hatclosed = NoiseHit('highhat closed', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.1, filtl=0.99, filth=0.20)
+    chiptune.add_instrument(hatclosed)
+
+    hatopen = NoiseHit('highhat open', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.225, filtl=0.99, filth=0.20)
+    chiptune.add_instrument(hatopen)
 
     snare = NoiseHit('snare', fadeout=0.2, filtl=0.17, filth=0.88)
     chiptune.add_instrument(snare)
