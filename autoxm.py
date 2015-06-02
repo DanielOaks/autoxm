@@ -364,11 +364,31 @@ class XmSample:
     def generate(self):
         raise Exception("The generate() function must be overridden in subclasses!")
 
-    def amplify(self):
+    def filt(self, in_data, filtl=0, filth=1):
+        out_data = []
+
+        ql = 0
+        qh = 0
+
+        for val in in_data:
+            ql += (val - ql) * filtl
+            qh += (val - qh) * filth
+            val = ql - qh
+
+            out_data.append(val)
+
+        return out_data
+
+    def amplify(self, in_data=None):
+        if in_data:
+            data = in_data
+        else:
+            data = self.data
+
         low = -0.0000000001
         high = 0.0000000001
 
-        for val in self.data:
+        for val in data:
             if val < low:
                 low = val
             if val > high:
@@ -376,8 +396,13 @@ class XmSample:
 
         amp = self.boost / max(-low, high)
 
-        for i in range(len(self.data)):
-            self.data[i] *= amp
+        for i in range(len(data)):
+            if in_data:
+                data[i] *= amp
+            else:
+                self.data[i] *= amp
+
+        return data
 
 
 class XmInstrument:
@@ -517,13 +542,16 @@ class NoiseHit(XmInstrument):
         super().__init__(name=name, **kwargs)
 
 
-# Synth
+# Strings
 class KsSample(XmSample):
-    def __init__(self, name='ks synth', **kwargs):
+    def __init__(self, name='ks synth', noise_filtl=0, noise_filth=1, **kwargs):
         """Karplus–Strong string synthesis."""
         super().__init__(name=name, **kwargs)
 
-        self.loop_type = XM_LOOP_FORWARD
+        self.noise_filtl = noise_filtl
+        self.noise_filth = noise_filth
+
+        self.loop_type = XM_LOOP_PINGPONG
 
     def generate(self):
         self.clear()
@@ -550,6 +578,8 @@ class KsSample(XmSample):
                 val = 1
 
             noise.append(val)
+        noise = self.filt(noise, filtl=self.noise_filtl, filth=self.noise_filth)
+        noise = self.amplify(noise)
 
         avg = 0
         count = 0
@@ -750,7 +780,7 @@ def autoxm(name=None, tempo=None):
 if __name__ == '__main__':
     chiptune = autoxm()
 
-    string = KsInstrument('string', length=2, fadeout=6, filtl=0, filth=1)
+    string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.992, noise_filth=0.02)
     chiptune.add_instrument(string)
 
     hatclosed = NoiseHit('highhat closed', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.1, filtl=0.99, filth=0.20)
