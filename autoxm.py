@@ -559,18 +559,20 @@ class KsSample(XmSample):
         # variables
         freq = MIDDLE_C
         decay = 0.02
-        # freq = MIDDLE_C / 2
-        # decay = 0.003
 
-        period = int(freq / 2)
+        period = int(10000 / freq)
+        noise_len = int((5 / 1000) * XM_SAMPLE_FREQ)  # 5ms
+        if noise_len < period:
+            noise_len = period
+
         loss_factor = 1 - decay
         stretch = 0.3
 
         # generate and center our random samples
         noise = []
-        for i in range(period):
+        for i in range(noise_len):
             # gaussian sounds better than completely random for this
-            val = random.gauss(0, 0.3)
+            val = random.gauss(0, 0.5)
 
             if val < -1:
                 val = -1
@@ -583,13 +585,13 @@ class KsSample(XmSample):
 
         avg = 0
         count = 0
-        for j in range(period):
+        for j in range(noise_len):
             avg += noise[j]
             count += 1
         avg /= count
 
         # correct for the bias
-        for j in range(len(noise)):
+        for j in range(noise_len):
             noise[j] = noise[j] - avg
 
             if 1 < noise[j]:
@@ -599,8 +601,7 @@ class KsSample(XmSample):
 
         # calculate stuff
         for i in range(self.sample_count):
-
-            if i < period:
+            if i < noise_len:
                 pos = i
                 data1 = noise[pos]
                 data2 = noise[pos - 1]
