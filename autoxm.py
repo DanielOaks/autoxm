@@ -560,8 +560,11 @@ class KsSample(XmSample):
         freq = MIDDLE_C
         decay = 0.02
 
+        # we use 10000 instead of 1000 because our math works out better like
+        #   that. haven't had a good look into it, but it sounds about right
         period = int(10000 / freq)
-        noise_len = int((5 / 1000) * XM_SAMPLE_FREQ)  # 5ms
+        # noise defaults to 5ms, with a minimum of the period
+        noise_len = int((5 / 1000) * XM_SAMPLE_FREQ)
         if noise_len < period:
             noise_len = period
 
@@ -580,6 +583,8 @@ class KsSample(XmSample):
                 val = 1
 
             noise.append(val)
+        # filter, particularly the lowpass filter, cleans up lots of the ugly
+        #   plucking noise we don't really want to leave in
         noise = self.filt(noise, filtl=self.noise_filtl, filth=self.noise_filth)
         noise = self.amplify(noise)
 
@@ -599,7 +604,7 @@ class KsSample(XmSample):
             elif -1 > noise[j]:
                 noise[j] = -1
 
-        # calculate stuff
+        # calculate samples
         for i in range(self.sample_count):
             if i < noise_len:
                 pos = i
@@ -790,7 +795,7 @@ if __name__ == '__main__':
     hatopen = NoiseHit('highhat open', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.225, filtl=0.99, filth=0.20)
     chiptune.add_instrument(hatopen)
 
-    snare = NoiseHit('snare', fadeout=0.2, filtl=0.17, filth=0.88)
+    snare = NoiseHit('snare', relative_note=3, fadeout=0.122, filtl=0.37, filth=0.54)
     chiptune.add_instrument(snare)
 
     pattern = XmPattern()
