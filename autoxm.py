@@ -2,8 +2,8 @@
 # AutoXM
 # written by Daniel Oaks <daniel@danieloaks.net>
 # released into the public domain
-# inspired by the public domain autotracker by Ben "GreaseMonkey" Russell
-#   and uses code from that script
+# inspired by and uses code from the public domain
+#   autotracker.py by Ben "GreaseMonkey" Russell
 import math
 import random
 import struct
