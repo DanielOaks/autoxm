@@ -4,7 +4,9 @@
 # released into the public domain
 # inspired by the public domain autotracker by Ben "GreaseMonkey" Russell
 #   and uses code from that script
-import struct, random
+import math
+import random
+import struct
 
 # from musthe import scale, Note, Interval, Chord
 
@@ -541,6 +543,61 @@ class NoiseHit(XmInstrument):
     def __init__(self, name='noise', **kwargs):
         super().__init__(name=name, **kwargs)
 
+# kick
+class KickSample(XmSample):
+    def __init__(self, name='kick', **kwargs):
+        """Kick sample.
+
+        Arguments:
+            length (float): Length of the sample in seconds
+        """
+        super().__init__(name=name, **kwargs)
+
+    def generate(self):
+        self.clear()
+
+        vol_noise = 2.8
+        vol_sine = 1.2
+        vol_noise_decay = 1.0 / (XM_SAMPLE_FREQ * 0.01)
+        vol_sine_decay = 1.0 / (XM_SAMPLE_FREQ * 0.2)
+
+        max_sin = 0.6
+
+        q_noise = 0
+
+        kick_mul = math.pi * 2 * 158 / XM_SAMPLE_FREQ
+        offs_sine = 0
+        offs_sine_speed = kick_mul
+        offs_sine_decay = 0.9995
+
+        for i in range(self.sample_count):
+            sv = max(-(max_sin), min(max_sin, math.sin(offs_sine)))
+            offs_sine += offs_sine_speed
+            offs_sine_speed *= offs_sine_decay
+
+            nv = random.random() * 2 - 1
+            q_noise += (nv - q_noise) * 0.1
+            nv = q_noise
+
+            self.add_sample(nv * vol_noise + sv * vol_sine)
+
+            vol_noise -= vol_noise_decay
+            if vol_noise < 0:
+                vol_noise = 0
+
+            vol_sine -= vol_sine_decay
+            if vol_sine < 0:
+                vol_sine = 0
+
+        self.amplify()
+
+
+class KickHit(XmInstrument):
+    sample_generator = KickSample
+
+    def __init__(self, name='kick', **kwargs):
+        super().__init__(name=name, **kwargs)
+
 
 # Strings
 class KsSample(XmSample):
@@ -786,6 +843,9 @@ def autoxm(name=None, tempo=None):
 if __name__ == '__main__':
     chiptune = autoxm()
 
+    kick = KickHit('kick')
+    chiptune.add_instrument(kick)
+
     string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.992, noise_filth=0.02)
     chiptune.add_instrument(string)
 
@@ -795,7 +855,7 @@ if __name__ == '__main__':
     hatopen = NoiseHit('highhat open', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.225, filtl=0.99, filth=0.20)
     chiptune.add_instrument(hatopen)
 
-    snare = NoiseHit('snare', relative_note=3, fadeout=0.122, filtl=0.37, filth=0.54)
+    snare = NoiseHit('snare', relative_note=3, fadeout=0.122, filtl=0.27, filth=0.44)
     chiptune.add_instrument(snare)
 
     pattern = XmPattern()
