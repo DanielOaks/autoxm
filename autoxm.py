@@ -321,7 +321,7 @@ class XmSample:
         Arguments:
             name (str): Name of the sample.
             relative_note (int): Note change relative to C-4 (-1 would be B-4).
-            length (int): Length of the sample in seconds.
+            length (float): Length of the sample in seconds.
             filtl (int): Low-pass filter, 0 to 1.
             filth (int): High-pass filter, 0 to 1.
         """
@@ -500,6 +500,63 @@ class XmNote:
         return note
 
 
+## Noise Functions
+perm = [
+    151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,
+    142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,
+    203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,
+    74,165,71,134,139,48,27,166,77,146,158,231,83,111,229,122,60,211,133,230,
+    220,105,92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,73,209,76,
+    132,187,208,89,18,169,200,196,135,130,116,188,159,86,164,100,109,198,173,
+    186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,212,207,206,
+    59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,
+    70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,
+    178,185,112,104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,
+    241,81,51,145,235,249,14,239,107,49,192,214,31,181,199,106,157,184,84,204,
+    176,115,121,50,45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,
+    128,195,78,66,215,61,156,180,151,160,137,91,90,15,131,13,201,95,96,53,194,
+    233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,247,120,234,
+    75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,
+    20,125,136,171,168,68,175,74,165,71,134,139,48,27,166,77,146,158,231,83,
+    111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,143,54,65,25,
+    63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,
+    159,86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,
+    118,126,255,82,85,212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,
+    213,119,248,152,2,44,154,163,70,221,153,101,155,167,43,172,9,129,22,39,253,
+    19,98,108,110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,193,
+    238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,107,49,192,214,31,
+    181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,93,
+    222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180
+]
+
+
+def grad(hash, x):
+    h = int(hash) & 15
+    grad = 1 + (h & 7)  # gradient value 1, 2, ..., 8
+    if h & 8:
+        grad = - grad  # set a random sign for the gradient
+    return grad * x  # multiply the gradient with the distance
+
+
+def simplex_noise_1d(x):
+    i0 = math.floor(x)
+    i1 = i0 + 1
+    x0 = x - i0
+    x1 = x0 - 1
+
+    t0 = 1 - x0 * x0
+    t0 *= t0
+    n0 = t0 * t0 * grad(perm[i0 & 0xff], x0)
+
+    t1 = 1 - x1 * x1
+    t1 *= t1
+    n1 = t1 * t1 * grad(perm[i1 & 0xff], x1)
+
+    # the maximum value of this noise is 8*(3/4)^4 = 2.53125
+    # a factor of 0.395 scales to fit exactly within [-1,1]
+    return 0.395 * (n0 + n1)
+
+
 ## Instruments
 #
 
@@ -556,19 +613,21 @@ class KickSample(XmSample):
     def generate(self):
         self.clear()
 
-        vol_noise = 2.8
-        vol_sine = 1.2
-        vol_noise_decay = 1.0 / (XM_SAMPLE_FREQ * 0.01)
-        vol_sine_decay = 1.0 / (XM_SAMPLE_FREQ * 0.2)
+        vol_noise = 11
+        vol_sine = 9
+        vol_noise_decay = 1.0 / (XM_SAMPLE_FREQ * 0.002)
+        vol_sine_decay = 1.0 / (XM_SAMPLE_FREQ * 0.022)
 
-        max_sin = 0.6
+        max_sin = 0.5
 
-        q_noise = 0
+        q_noise = 0  # XXX - quantise noise?
 
         kick_mul = math.pi * 2 * 158 / XM_SAMPLE_FREQ
         offs_sine = 0
-        offs_sine_speed = kick_mul
-        offs_sine_decay = 0.9995
+        offs_sine_speed = kick_mul / 5
+        offs_sine_decay = 0.9992
+
+        simplex_seed = random.randint(1, 10000)
 
         for i in range(self.sample_count):
             sv = max(-(max_sin), min(max_sin, math.sin(offs_sine)))
@@ -579,7 +638,26 @@ class KickSample(XmSample):
             q_noise += (nv - q_noise) * 0.1
             nv = q_noise
 
-            self.add_sample(nv * vol_noise + sv * vol_sine)
+            noise = nv * vol_noise
+            sine = sv * vol_sine
+
+            smp = noise + sine / 2
+
+            # we go to simplex noise after 6pi, because it sounds better
+            #   and stops it from going into a highish-pitched 'buzz'
+            if offs_sine > 6 * math.pi:
+                noise_smp = simplex_noise_1d(offs_sine * (i / self.sample_count) + simplex_seed)
+
+            if offs_sine > 6 * math.pi and offs_sine < 7 * math.pi:
+                # mix sine and simplex together for a bit
+                mix = (offs_sine - 6 * math.pi) / math.pi
+                smp = ((1 - mix) * smp) + (mix * noise_smp)
+            elif offs_sine >= 7 * math.pi:
+                smp = noise_smp
+
+            # vol makes sure it fades off nicely
+            vol = min(1, (self.sample_count - max(1, i)) / self.sample_count * 2)
+            self.add_sample(smp * vol)
 
             vol_noise -= vol_noise_decay
             if vol_noise < 0:
@@ -595,8 +673,8 @@ class KickSample(XmSample):
 class KickHit(XmInstrument):
     sample_generator = KickSample
 
-    def __init__(self, name='kick', **kwargs):
-        super().__init__(name=name, **kwargs)
+    def __init__(self, name='kick', length=0.6, **kwargs):
+        super().__init__(name=name, length=length, **kwargs)
 
 
 # Strings
@@ -838,7 +916,7 @@ def autoxm(name=None, tempo=None):
     mod = XmFile(name, tempo)
 
     # adding instruments
-    kick = KickHit('kick')
+    kick = KickHit('kick', filth=0.76)
     mod.add_instrument(kick)
 
     string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.92, noise_filth=0.02)
