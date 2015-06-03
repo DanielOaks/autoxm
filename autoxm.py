@@ -624,7 +624,7 @@ class KickSample(XmSample):
 
         kick_mul = math.pi * 2 * 158 / XM_SAMPLE_FREQ
         offs_sine = 0
-        offs_sine_speed = kick_mul / 5
+        offs_sine_speed = kick_mul / 2.5
         offs_sine_decay = 0.9992
 
         simplex_seed = random.randint(1, 10000)
@@ -645,14 +645,14 @@ class KickSample(XmSample):
 
             # we go to simplex noise after 6pi, because it sounds better
             #   and stops it from going into a highish-pitched 'buzz'
-            if offs_sine > 6 * math.pi:
+            if offs_sine > 12 * math.pi:
                 noise_smp = simplex_noise_1d(offs_sine * (i / self.sample_count) * 1.35 + simplex_seed)
 
-            if offs_sine > 6 * math.pi and offs_sine < 7 * math.pi:
+            if offs_sine > 12 * math.pi and offs_sine < 13 * math.pi:
                 # mix sine and simplex together for a bit
-                mix = (offs_sine - 6 * math.pi) / math.pi
+                mix = (offs_sine - 12 * math.pi) / math.pi
                 smp = ((1 - mix) * smp) + (mix * noise_smp)
-            elif offs_sine >= 7 * math.pi:
+            elif offs_sine >= 13 * math.pi:
                 smp = noise_smp
 
             # vol makes sure it fades off nicely
