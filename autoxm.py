@@ -122,9 +122,9 @@ class XmFile:
 
         return correct_bytes
 
-    def save(self, filename):
+    def save(self):
         """Save the module as a file."""
-        with open(filename, 'wb') as fp:
+        with open(self.filename, 'wb') as fp:
             # header
             fp.write(XM_ID_TEXT.encode('ascii'))
             fp.write(self._get_padded(self.name, 20, pad_with=b' '))
@@ -837,35 +837,33 @@ def autoxm(name=None, tempo=None):
         tempo = random.randint(90, 160)
     mod = XmFile(name, tempo)
 
+    # adding instruments
+    kick = KickHit('kick')
+    mod.add_instrument(kick)
+
+    string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.92, noise_filth=0.02)
+    mod.add_instrument(string)
+
+    hatclosed = NoiseHit('highhat closed', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.1, filtl=0.99, filth=0.20)
+    mod.add_instrument(hatclosed)
+
+    hatopen = NoiseHit('highhat open', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.225, filtl=0.99, filth=0.20)
+    mod.add_instrument(hatopen)
+
+    snare = NoiseHit('snare', relative_note=3, fadeout=0.122, filtl=0.27, filth=0.44)
+    mod.add_instrument(snare)
+
+    # add basic pattern so we can open the file
+    pattern = XmPattern()
+    mod.add_pattern_to_order(pattern)
+
     return mod
 
 
 if __name__ == '__main__':
-    chiptune = autoxm()
-
-    # adding instruments
-    kick = KickHit('kick')
-    chiptune.add_instrument(kick)
-
-    string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.92, noise_filth=0.02)
-    chiptune.add_instrument(string)
-
-    hatclosed = NoiseHit('highhat closed', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.1, filtl=0.99, filth=0.20)
-    chiptune.add_instrument(hatclosed)
-
-    hatopen = NoiseHit('highhat open', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.225, filtl=0.99, filth=0.20)
-    chiptune.add_instrument(hatopen)
-
-    snare = NoiseHit('snare', relative_note=3, fadeout=0.122, filtl=0.27, filth=0.44)
-    chiptune.add_instrument(snare)
-
-    # add basic pattern so we can open the file
-    pattern = XmPattern()
-    chiptune.add_pattern_to_order(pattern)
+    chiptune = autoxm('new')
 
     # saving out
-    filename = chiptune.filename
-    filename = 'new.xm'
+    chiptune.save()
 
-    chiptune.save(filename)
-    print('Saving as', filename)
+    print('Saving as', chiptune.filename)
