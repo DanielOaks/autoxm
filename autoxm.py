@@ -613,12 +613,12 @@ class KickSample(XmSample):
     def generate(self):
         self.clear()
 
-        vol_noise = 11
-        vol_sine = 9
+        vol_noise = 9
+        vol_sine = 15
         vol_noise_decay = 1.0 / (XM_SAMPLE_FREQ * 0.002)
         vol_sine_decay = 1.0 / (XM_SAMPLE_FREQ * 0.022)
 
-        max_sin = 0.5
+        max_sin = 0.6
 
         q_noise = 0  # XXX - quantise noise?
 
@@ -646,7 +646,7 @@ class KickSample(XmSample):
             # we go to simplex noise after 6pi, because it sounds better
             #   and stops it from going into a highish-pitched 'buzz'
             if offs_sine > 6 * math.pi:
-                noise_smp = simplex_noise_1d(offs_sine * (i / self.sample_count) + simplex_seed)
+                noise_smp = simplex_noise_1d(offs_sine * (i / self.sample_count) * 1.35 + simplex_seed)
 
             if offs_sine > 6 * math.pi and offs_sine < 7 * math.pi:
                 # mix sine and simplex together for a bit
@@ -666,6 +666,8 @@ class KickSample(XmSample):
             vol_sine -= vol_sine_decay
             if vol_sine < 0:
                 vol_sine = 0
+
+        self.data = self.filt(self.data, filth=0.85)
 
         self.amplify()
 
