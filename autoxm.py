@@ -843,10 +843,11 @@ def autoxm(name=None, tempo=None):
 if __name__ == '__main__':
     chiptune = autoxm()
 
+    # adding instruments
     kick = KickHit('kick')
     chiptune.add_instrument(kick)
 
-    string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.992, noise_filth=0.02)
+    string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.92, noise_filth=0.02)
     chiptune.add_instrument(string)
 
     hatclosed = NoiseHit('highhat closed', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.1, filtl=0.99, filth=0.20)
@@ -858,9 +859,11 @@ if __name__ == '__main__':
     snare = NoiseHit('snare', relative_note=3, fadeout=0.122, filtl=0.27, filth=0.44)
     chiptune.add_instrument(snare)
 
+    # add basic pattern so we can open the file
     pattern = XmPattern()
     chiptune.add_pattern_to_order(pattern)
 
+    # saving out
     filename = chiptune.filename
     filename = 'new.xm'
 
