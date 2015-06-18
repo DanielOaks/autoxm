@@ -615,14 +615,14 @@ class KickSample(XmSample):
 
         vol_noise = 9
         vol_sine = 15
-        vol_noise_decay = 1.0 / (XM_SAMPLE_FREQ * 0.002)
+        vol_noise_decay = 1.0 / (XM_SAMPLE_FREQ * 0.004)
         vol_sine_decay = 1.0 / (XM_SAMPLE_FREQ * 0.022)
 
         max_sin = 0.6
 
         q_noise = 0  # XXX - quantise noise?
 
-        kick_mul = math.pi * 2 * 158 / XM_SAMPLE_FREQ
+        kick_mul = math.pi * 2 * 153 / XM_SAMPLE_FREQ
         offs_sine = 0
         offs_sine_speed = kick_mul / 2.5
         offs_sine_decay = 0.9992
@@ -646,7 +646,7 @@ class KickSample(XmSample):
             # we go to simplex noise after 6pi, because it sounds better
             #   and stops it from going into a highish-pitched 'buzz'
             if offs_sine > 12 * math.pi:
-                noise_smp = simplex_noise_1d(offs_sine * (i / self.sample_count) * 1.35 + simplex_seed)
+                noise_smp = simplex_noise_1d(offs_sine * (i / self.sample_count) * 1.35 + simplex_seed) * 0.7
 
             if offs_sine > 12 * math.pi and offs_sine < 13 * math.pi:
                 # mix sine and simplex together for a bit
@@ -675,7 +675,7 @@ class KickSample(XmSample):
 class KickHit(XmInstrument):
     sample_generator = KickSample
 
-    def __init__(self, name='kick', length=0.6, **kwargs):
+    def __init__(self, name='kick', length=0.24, **kwargs):
         super().__init__(name=name, length=length, **kwargs)
 
 
@@ -918,7 +918,7 @@ def autoxm(name=None, tempo=None):
     mod = XmFile(name, tempo)
 
     # adding instruments
-    kick = KickHit('kick', filth=0.76)
+    kick = KickHit('kick', filth=0.79)
     mod.add_instrument(kick)
 
     string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.92, noise_filth=0.02)
