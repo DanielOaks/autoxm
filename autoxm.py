@@ -45,7 +45,15 @@ XM_LOOP_NONE = 0x0
 XM_LOOP_FORWARD = 0x1
 XM_LOOP_PINGPONG = 0x2
 
-MIDDLE_C = 220.0 * (2.0 ** (3.0 / 12.0))
+XM_MIN_NOTE_ID = 1
+XM_MAX_NOTE_ID = 96
+
+
+def linear_frequency(note_id, finetune=0):
+    """Return the linear frequency for the given note."""
+    period = 10 * 12 * 16 * 4 - note_id * 16 * 4 - finetune / 2
+    frequency = 8363 * (2 ** ((6 * 12 * 16 * 4 - period) / (12 * 16 * 4)))
+    return frequency
 
 
 # classes
@@ -447,7 +455,7 @@ class XmInstrument:
 
     @sample_map.setter
     def sample_map(self, value):
-        while len(value) < 96:
+        while len(value) < XM_MAX_NOTE_ID:
             value.append(0)
 
         self._sample_map = value
@@ -703,12 +711,13 @@ class KsSample(XmSample):
         self.clear()
 
         # variables
-        freq = MIDDLE_C
+        freq = linear_frequency(Note('C4').xm_note)
         decay = 0.02
 
-        # we use 10000 instead of 1000 because our math works out better like
+        # we use 100000 instead of 1000 because our math works out better like
         #   that. haven't had a good look into it, but it sounds about right
-        period = int(10000 / freq)
+        # maybe seconds -> ms or something dumb like that?
+        period = int(100000 / freq)
         # noise defaults to 5ms, with a minimum of the period
         noise_len = int((5 / 1000) * XM_SAMPLE_FREQ)
         if noise_len < period:
@@ -787,16 +796,18 @@ class Note(MustheNote):
 
     @property
     def xm_note(self):
-        return (self.octave * 12) + self.note_id
+        # XM note IDs start at C1
+        return ((self.octave - 1) * 12) + self.note_id + 1
 
 
 class StrategyBase:
 
-    def __init__(self):
+    def __init__(self, key='C4', scale_name='major'):
         self.generators = []
         self.channels_used = 0
-        self.key = Note('C4')
-        self.scale = 'major'
+        self.key = Note(key)
+        self.scale = scale_name
+        self.notes = scale(key, scale_name)
 
     def add_generator(self, generator):
         self.generators.append(generator)
