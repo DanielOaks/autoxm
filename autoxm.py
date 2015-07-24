@@ -51,6 +51,7 @@ MIDDLE_C = 220.0 * (2.0 ** (3.0 / 12.0))
 # classes
 class XmFile:
     """Stores and outputs an XM file."""
+
     def __init__(self, name, bpm, channels=2):
         self.name = name
         self.channels = []
@@ -155,7 +156,7 @@ class XmFile:
                 for row in pattern.rows:
                     for chan in range(len(self.channels)):
                         note = row.notes.get(chan, None)
-                        
+
                         if note is None:
                             # MSB indicates bit compression
                             packed_pattern_data += struct.pack('<B', 0x80)
@@ -454,6 +455,7 @@ class XmInstrument:
 
 class XmChannel:
     """Stores an XM channel."""
+
     def __init__(self, volume=100, pan=0):
         self.volume = volume
         self.pan = pan
@@ -461,6 +463,7 @@ class XmChannel:
 
 class XmPattern:
     """Stores an XM pattern."""
+
     def __init__(self, number_of_rows=0x80):
         self.rows = []
 
@@ -470,7 +473,7 @@ class XmPattern:
 
     @property
     def number_of_rows(self):
-        return len(rows)
+        return len(self.rows)
 
     def add_row(self, row):
         self.rows.append(row)
@@ -478,16 +481,19 @@ class XmPattern:
 
 class XmRow:
     """Stores an XM row."""
+
     def __init__(self):
         self.notes = {}
 
-    def set_note(self, channel, note, instrument, volume, effect_type=XM_EFFECT_NONE, effect_params=XM_EFFECT_PARAMS_NONE):
+    def set_note(self, channel, note, instrument, volume, effect_type=XM_EFFECT_NONE,
+                 effect_params=XM_EFFECT_PARAMS_NONE):
         new_note = XmNote(note, instrument, volume, effect_type, effect_params)
         self.notes[channel] = new_note
 
 
 class XmNote:
     """Stores an XM note."""
+
     def __init__(self, note, instrument, volume, effect_type, effect_params):
         self.note = note
         self.instrument = instrument
@@ -497,10 +503,11 @@ class XmNote:
 
     @property
     def xm_note(self):
-        return note
+        return self.note
 
 
-## Noise Functions
+# Noise Functions
+#
 perm = [
     151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,
     142,8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,
@@ -557,8 +564,9 @@ def simplex_noise_1d(x):
     return 0.395 * (n0 + n1)
 
 
-## Instruments
+# Instruments
 #
+
 
 # noise
 class NoiseSample(XmSample):
@@ -599,6 +607,7 @@ class NoiseHit(XmInstrument):
 
     def __init__(self, name='noise', **kwargs):
         super().__init__(name=name, **kwargs)
+
 
 # kick
 class KickSample(XmSample):
@@ -921,13 +930,16 @@ def autoxm(name=None, tempo=None):
     kick = KickHit('kick', filth=0.79)
     mod.add_instrument(kick)
 
-    string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.92, noise_filth=0.02)
+    string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.92,
+                          noise_filth=0.02)
     mod.add_instrument(string)
 
-    hatclosed = NoiseHit('highhat closed', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.1, filtl=0.99, filth=0.20)
+    hatclosed = NoiseHit('highhat closed', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.1,
+                         filtl=0.99, filth=0.20)
     mod.add_instrument(hatclosed)
 
-    hatopen = NoiseHit('highhat open', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.225, filtl=0.99, filth=0.20)
+    hatopen = NoiseHit('highhat open', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.225,
+                       filtl=0.99, filth=0.20)
     mod.add_instrument(hatopen)
 
     snare = NoiseHit('snare', relative_note=3, fadeout=0.122, filtl=0.27, filth=0.44)
