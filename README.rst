@@ -13,6 +13,8 @@ Project was inspired by `autotracker-bottomup` from Ben "GreaseMonkey" Russell, 
 
 ``.xm`` file specifications from Mr.H of Triton, with corrections and expansions from ByteRaver & Wodan of TNT / NO-ID, Guru and Alfred of Sahara Surfers, and the uFMOD project.
 
+We use the `musthe <https://github.com/gciruelos/musthe>`_ library from Gonzalo Ciruelos and contributors, under the MIT license.
+
 
 License
 -------

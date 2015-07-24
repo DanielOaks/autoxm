@@ -8,7 +8,7 @@ import math
 import random
 import struct
 
-# from musthe import scale, Note, Interval, Chord
+from musthe import scale, Note as MustheNote, Interval, Chord
 
 # XM Module Handling
 #
@@ -780,6 +780,32 @@ class KsInstrument(XmInstrument):
         super().__init__(name=name, length=length, **kwargs)
 
 
+# Pattern Generation
+#
+
+class Note(MustheNote):
+
+    @property
+    def xm_note(self):
+        return (self.octave * 12) + self.note_id
+
+
+class StrategyBase:
+
+    def __init__(self):
+        self.generators = []
+        self.channels_used = 0
+        self.key = Note('C4')
+        self.scale = 'major'
+
+    def add_generator(self, generator):
+        self.generators.append(generator)
+        self.channels_used = generator.channels_used
+
+    def get_pattern(self):
+        raise Exception('This should be overwritten for your subclass!')
+
+
 # Name Generation
 #
 
@@ -942,7 +968,7 @@ def autoxm(name=None, tempo=None):
                        filtl=0.99, filth=0.20)
     mod.add_instrument(hatopen)
 
-    snare = NoiseHit('snare', relative_note=3, fadeout=0.122, filtl=0.27, filth=0.44)
+    snare = NoiseHit('snare', relative_note=3, fadeout=0.15, filtl=0.27, filth=0.44)
     mod.add_instrument(snare)
 
     # add basic pattern so we can open the file
