@@ -173,6 +173,7 @@ class XmFile:
                             xm_note = note.xm_note if note.xm_note is not None else 0
                             instrument = self.instruments.index(note.instrument) + 1 if note.instrument else 0
                             volume = note.volume if note.volume is not None else 0
+                            volume = int((volume / 100) * 0x40) + 0x10
                             packed_pattern_data += struct.pack('<B', xm_note)
                             packed_pattern_data += struct.pack('<B', instrument)
                             packed_pattern_data += struct.pack('<B', volume)
@@ -904,13 +905,13 @@ class BassGenerator(GeneratorBase):
                                 m,
                                 self.instrument, 100)
 
-                # if random.random() < 0.2:
-                #     pattern.data[row][chn][0] += 12
-                #     if random.random() < 0.4:
-                #         pattern.data[row][chn][3] = ord('S') - ord('A') + 1
-                #         pattern.data[row][chn][4] = 0xC0 + random.randint(1,2)
-                #     else:
-                #         pattern.data[row + 2][chn] = [254, self.sample, 255, 0, 0]
+                if random.random() < 0.2:
+                    pattern.rows[row].notes[channel].note.octave += 1
+                    if random.random() < 0.4:
+                        pattern.rows[row].notes[channel].effect_type = 0xE
+                        pattern.rows[row].notes[channel].effect_params = 0xC0 + 0x2
+                    else:
+                        pattern.rows[row + 2].set_note(channel, None, 0, 100)
 
                 leadin = 0
             else:
