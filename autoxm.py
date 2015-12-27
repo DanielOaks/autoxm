@@ -802,12 +802,12 @@ class Note(MustheNote):
 
 class StrategyBase:
 
-    def __init__(self, key='C4', scale_name='major'):
+    def __init__(self, key, scale_name):
         self.generators = []
+        self.patterns = []
         self.channels_used = 0
         self.key = Note(key)
         self.scale = scale_name
-        self.notes = scale(key, scale_name)
 
     def add_generator(self, generator):
         self.generators.append(generator)
@@ -815,6 +815,53 @@ class StrategyBase:
 
     def get_pattern(self):
         raise Exception('This should be overwritten for your subclass!')
+
+
+class MainStrategy:
+
+    def __init__(self, key, scale_name, pattern_size, block_size):
+        super().__init__(self, key, scale_name)
+        self.notes = scale(key, scale_name)
+        self.rspeed = 2**random.randint(2,3)
+
+        self.rhythm = [3]+[0]*(self.rspeed-1)+[1]+[0]*(self.rspeed-1)
+        self.rhythm *= (self.pattern_size // len(self.rhythm))
+
+        self.pattern_index = 0
+
+        self.new_chord_sequence()
+
+    def new_chord_sequence(self):
+        self.chord_sequence = random.choice([
+            Chord(self.key),
+            Chord(self.key, chord_type='open5'),
+        ])
+
+        self.chord_sequence_2 = random.choice([
+            Chord(self.key + Interval('M3')),
+            Chord(self.key + Interval('m3'), chord_type='open5'),
+        ])
+
+    def get_pattern(self):
+        pattern = Pattern(self.patsize)
+
+        chord_sequence = self.chord_sequence_2[:] if self.pat_idx % 8 >= 4 else self.chord_sequence[:]
+
+        for i in xrange(0, self.pattern_size, self.block_size):
+            chord = chord_sequence.pop(0)
+            for channel, gen in self.gens:
+                gen.apply_notes(channel, pattern, self, self.rhythm, i, self.blocksize, self.key, chord)
+
+            chord_sequence.append(chord)
+
+        self.patterns.append(pattern)
+
+        self.pattern_index += 1
+
+        return pattern
+
+    def get_key(self):
+        return self.key
 
 
 # Name Generation
