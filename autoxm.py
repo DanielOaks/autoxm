@@ -269,7 +269,7 @@ class XmFile:
                     # we store our sample data as -1 to 1 in-memory, so we convert it to
                     #   -127 to 127, doing the byte arithmetic wraparound ourselves
                     for point in sample.data:
-                        b3 = int(point * 127)
+                        b3 = max(min(int(point * 127), 127), -127)
                         b2 = b3 - b1
                         if b2 < -127:
                             tb3 = 128 + b3 + 127
@@ -394,7 +394,7 @@ class XmSample:
 
         return out_data
 
-    def amplify(self, in_data=None):
+    def amplify(self, in_data=None, vol=1.0):
         if in_data:
             data = in_data
         else:
@@ -410,6 +410,7 @@ class XmSample:
                 high = val
 
         amp = self.boost / max(-low, high)
+        amp *= vol
 
         for i in range(len(data)):
             if in_data:
@@ -621,6 +622,7 @@ class NoiseHit(XmInstrument):
 
     def __init__(self, name='noise', **kwargs):
         super().__init__(name=name, **kwargs)
+        self.note = Note('C4')
 
 
 # kick
@@ -692,7 +694,7 @@ class KickSample(XmSample):
 
         self.data = self.filt(self.data, filth=0.85)
 
-        self.amplify()
+        self.amplify(vol=1.15)
 
 
 class KickHit(XmInstrument):
@@ -700,6 +702,7 @@ class KickHit(XmInstrument):
 
     def __init__(self, name='kick', length=0.24, **kwargs):
         super().__init__(name=name, length=length, **kwargs)
+        self.note = Note('G4')
 
 
 # Strings
@@ -918,6 +921,45 @@ class BassGenerator(GeneratorBase):
                 leadin += 1
 
 
+class DrumsGenerator(GeneratorBase):
+
+    def __init__(self, kick, hh_closed, hh_open, snare):
+        self.kick = kick
+        self.hh_closed = hh_closed
+        self.hh_open = hh_open
+        self.snare = snare
+        self.channels_used = 3
+
+        self.hat_row_interval = 2 ** random.randint(1, 2)
+        self.kick_row_interval = 2
+
+    def apply_notes(self, channel, pattern, strategy, rhythm, block_start, block_end, key, chord):
+        # do the hats
+        hat_channel = channel
+        for row in range(block_start, block_start + block_end, self.hat_row_interval):
+            vol = 100
+            instrument = self.hh_closed
+            if not (rhythm[row] & 2):
+                if (row & 8):
+                    vol = 40
+                if (row & 4):
+                    vol = 20
+                if (row & 2):
+                    vol = 10
+                if (row & 1):
+                    vol = 5
+
+                if random.random() < 0.2:
+                    instrument = self.hh_open
+
+            pattern.rows[row].set_note(hat_channel, instrument.note, instrument, vol)
+
+        # kick it up
+        kick_channel = channel + 1
+        for row in range(block_start, block_start + block_end, self.kick_row_interval):
+            if random.random() < 0.1 and not rhythm[row] & 1:
+                pattern.rows[row].set_note(kick_channel, self.kick.note, self.kick, 100)
+
 
 # Name Generation
 #
@@ -1066,7 +1108,8 @@ def autoxm(name=None, tempo=None):
     mod = XmFile(name, tempo)
 
     # adding instruments
-    kick = KickHit('kick', filth=0.79)
+    # kick = KickHit('kick', filth=0.79)
+    kick = NoiseHit('kick', relative_note=XM_RELATIVE_OCTAVEDOWN - 6, fadeout=0.13, filth=0.79)
     mod.add_instrument(kick)
 
     string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.92,
@@ -1077,7 +1120,7 @@ def autoxm(name=None, tempo=None):
                          filtl=0.99, filth=0.20)
     mod.add_instrument(hatclosed)
 
-    hatopen = NoiseHit('highhat open', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.225,
+    hatopen = NoiseHit('highhat open', relative_note=XM_RELATIVE_OCTAVEUP + 6, fadeout=0.2,
                        filtl=0.99, filth=0.20)
     mod.add_instrument(hatopen)
 
@@ -1087,6 +1130,10 @@ def autoxm(name=None, tempo=None):
     # generate basic pattern
     strategy = MainStrategy(Note('C4'), 'major', 0x80, 0x80)
     strategy.add_generator(BassGenerator(string))
+    strategy.add_generator(DrumsGenerator(kick, hatclosed, hatopen, snare))
+    for i in range(strategy.channels_used):
+        mod.add_channel()
+
     mod.add_pattern_to_order(strategy.get_pattern())
 
     return mod
