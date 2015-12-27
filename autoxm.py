@@ -956,9 +956,23 @@ class DrumsGenerator(GeneratorBase):
 
         # kick it up
         kick_channel = channel + 1
+        snare_channel = channel + 2
         for row in range(block_start, block_start + block_end, self.kick_row_interval):
             if random.random() < 0.1 and not rhythm[row] & 1:
                 pattern.rows[row].set_note(kick_channel, self.kick.note, self.kick, 100)
+
+        did_kick = False
+        for row in range(block_start, block_start + block_end, 1):
+            if rhythm[row] & 1:
+                if did_kick:
+                    pattern.rows[row].set_note(snare_channel, self.snare.note, self.snare, 100)
+                else:
+                    current_row = row
+                    if random.random() < 0.1:
+                        current_row += 2
+                    pattern.rows[current_row].set_note(kick_channel, self.kick.note, self.kick, 100)
+
+                did_kick = not did_kick
 
 
 # Name Generation
@@ -1109,7 +1123,8 @@ def autoxm(name=None, tempo=None):
 
     # adding instruments
     # kick = KickHit('kick', filth=0.79)
-    kick = NoiseHit('kick', relative_note=XM_RELATIVE_OCTAVEDOWN - 6, fadeout=0.13, filth=0.79)
+    kick = NoiseHit('kick', fadeout=0.13, filth=0.79)
+    kick.note = Note('E2')
     mod.add_instrument(kick)
 
     string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.92,
@@ -1124,14 +1139,15 @@ def autoxm(name=None, tempo=None):
                        filtl=0.99, filth=0.20)
     mod.add_instrument(hatopen)
 
-    snare = NoiseHit('snare', relative_note=3, fadeout=0.15, filtl=0.27, filth=0.44)
+    snare = NoiseHit('snare', fadeout=0.15, filtl=0.27, filth=0.44)
+    snare.note = Note('G4')
     mod.add_instrument(snare)
 
     # generate basic pattern
     strategy = MainStrategy(Note('C4'), 'major', 0x80, 0x80)
     strategy.add_generator(BassGenerator(string))
     strategy.add_generator(DrumsGenerator(kick, hatclosed, hatopen, snare))
-    for i in range(strategy.channels_used):
+    for i in range(strategy.channels_used - len(mod.channels)):
         mod.add_channel()
 
     mod.add_pattern_to_order(strategy.get_pattern())
