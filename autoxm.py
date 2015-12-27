@@ -8,7 +8,7 @@ import math
 import random
 import struct
 
-from musthe import scale, Note as MustheNote, Interval, Chord
+from musthe import scale, Note, Interval, Chord
 
 # XM Module Handling
 #
@@ -170,9 +170,12 @@ class XmFile:
                             packed_pattern_data += struct.pack('<B', 0x80)
                         else:
                             # XXX - to do MSB bit compression
-                            packed_pattern_data += struct.pack('<B', note.xm_note)
-                            packed_pattern_data += struct.pack('<B', note.instrument)
-                            packed_pattern_data += struct.pack('<B', note.volume)
+                            xm_note = note.xm_note if note.xm_note is not None else 0
+                            instrument = self.instruments.index(note.instrument) + 1 if note.instrument else 0
+                            volume = note.volume if note.volume is not None else 0
+                            packed_pattern_data += struct.pack('<B', xm_note)
+                            packed_pattern_data += struct.pack('<B', instrument)
+                            packed_pattern_data += struct.pack('<B', volume)
                             packed_pattern_data += struct.pack('<B', note.effect_type)
                             packed_pattern_data += struct.pack('<B', note.effect_params)
 
@@ -511,7 +514,9 @@ class XmNote:
 
     @property
     def xm_note(self):
-        return self.note
+        if self.note is None:
+            return 0
+        return self.note.xm_note
 
 
 # Noise Functions
@@ -792,42 +797,36 @@ class KsInstrument(XmInstrument):
 # Pattern Generation
 #
 
-class Note(MustheNote):
-
-    @property
-    def xm_note(self):
-        # XM note IDs start at C1
-        return ((self.octave - 1) * 12) + self.note_id + 1
-
-
 class StrategyBase:
 
     def __init__(self, key, scale_name):
         self.generators = []
         self.patterns = []
         self.channels_used = 0
-        self.key = Note(key)
+        self.key = key
         self.scale = scale_name
 
     def add_generator(self, generator):
-        self.generators.append(generator)
-        self.channels_used = generator.channels_used
+        self.generators.append([self.channels_used, generator])
+        self.channels_used += generator.channels_used
 
     def get_pattern(self):
         raise Exception('This should be overwritten for your subclass!')
 
 
-class MainStrategy:
+class MainStrategy(StrategyBase):
 
     def __init__(self, key, scale_name, pattern_size, block_size):
-        super().__init__(self, key, scale_name)
+        super().__init__(key, scale_name)
         self.notes = scale(key, scale_name)
         self.rspeed = 2**random.randint(2,3)
 
+        self.pattern_size = pattern_size
+        self.block_size = block_size
+        self.pattern_index = 0
+
         self.rhythm = [3]+[0]*(self.rspeed-1)+[1]+[0]*(self.rspeed-1)
         self.rhythm *= (self.pattern_size // len(self.rhythm))
-
-        self.pattern_index = 0
 
         self.new_chord_sequence()
 
@@ -843,16 +842,13 @@ class MainStrategy:
         ])
 
     def get_pattern(self):
-        pattern = Pattern(self.patsize)
+        pattern = XmPattern(self.pattern_size)
 
-        chord_sequence = self.chord_sequence_2[:] if self.pat_idx % 8 >= 4 else self.chord_sequence[:]
+        chord_sequence = self.chord_sequence_2 if self.pattern_index % 8 >= 4 else self.chord_sequence
 
-        for i in xrange(0, self.pattern_size, self.block_size):
-            chord = chord_sequence.pop(0)
-            for channel, gen in self.gens:
-                gen.apply_notes(channel, pattern, self, self.rhythm, i, self.blocksize, self.key, chord)
-
-            chord_sequence.append(chord)
+        for i in range(0, self.pattern_size, self.block_size):
+            for channel, gen in self.generators:
+                gen.apply_notes(channel, pattern, self, self.rhythm, i, self.block_size, self.key, chord_sequence)
 
         self.patterns.append(pattern)
 
@@ -862,6 +858,64 @@ class MainStrategy:
 
     def get_key(self):
         return self.key
+
+
+class GeneratorBase:
+
+    def __init__(self, instrument):
+        self.instrument = instrument
+        self.channels_used = 1
+
+    def apply_notes(self, channel, pattern, strategy, rhythm, block_start, block_end, key, chord):
+        raise Exception('You need to replace this in your subclass!')
+
+
+class BassGenerator(GeneratorBase):
+
+    def apply_notes(self, channel, pattern, strategy, rhythm, block_start, block_end, key, chord):
+        base_note = chord.root_note
+
+        leadin = 0
+
+        for row in range(block_start, block_start + block_end, 1):
+            if rhythm[row] & 1:
+                n = base_note.copy()
+                if random.random() < 0.5:
+                    n.octave -= 1
+                pattern.rows[row].set_note(channel, n, self.instrument, 100)
+
+                if leadin != 0 and random.random() < 0.4:
+                    gran = 2
+                    count = 1
+
+                    #if random.random() < 0.2:
+                    #   gran = 1
+
+                    if leadin > gran * 2 and random.random() < 0.4:
+                        count += 1
+                        if leadin > gran * 3 and random.random() < 0.4:
+                            count += 1
+
+                    for j in range(count):
+                        m = base_note.copy()
+                        if random.random() < 0.5:
+                            m.octave -= 1
+                        pattern.rows[row - (j + 1) * gran].set_note(channel,
+                                m,
+                                self.instrument, 100)
+
+                # if random.random() < 0.2:
+                #     pattern.data[row][chn][0] += 12
+                #     if random.random() < 0.4:
+                #         pattern.data[row][chn][3] = ord('S') - ord('A') + 1
+                #         pattern.data[row][chn][4] = 0xC0 + random.randint(1,2)
+                #     else:
+                #         pattern.data[row + 2][chn] = [254, self.sample, 255, 0, 0]
+
+                leadin = 0
+            else:
+                leadin += 1
+
 
 
 # Name Generation
@@ -1029,9 +1083,10 @@ def autoxm(name=None, tempo=None):
     snare = NoiseHit('snare', relative_note=3, fadeout=0.15, filtl=0.27, filth=0.44)
     mod.add_instrument(snare)
 
-    # add basic pattern so we can open the file
-    pattern = XmPattern()
-    mod.add_pattern_to_order(pattern)
+    # generate basic pattern
+    strategy = MainStrategy(Note('C4'), 'major', 0x80, 0x80)
+    strategy.add_generator(BassGenerator(string))
+    mod.add_pattern_to_order(strategy.get_pattern())
 
     return mod
 

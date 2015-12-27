@@ -64,7 +64,6 @@ class Note():
             elif change == 'b': self.note_id -= 1
         self.note_id %= 12
 
-
     def __add__(self, interval):
         if not isinstance(interval, Interval):
             raise Exception('Cannot add '+type(interval)+' to a note.')
@@ -127,6 +126,14 @@ class Note():
     def __eq__(self, other):
         return self.scientific_notation() == other.scientific_notation()
 
+    def copy(self):
+        return Note(self.scientific_notation())
+
+    @property
+    def xm_note(self):
+        # XM note IDs start at C1
+        return ((self.octave - 1) * 12) + self.note_id + 1
+
 
 class Interval():
     """
@@ -139,6 +146,10 @@ class Interval():
     For example, 'd8', 'P1', 'A5' are valid intervals. 'P3', '5' are not.
     """
     def __init__(self, interval):
+        if isinstance(interval, int):
+            self.number = 0
+            self.semitones = interval
+            return
         try:
             self.semitones = {'P1': 0, 'A1':1, 'd2':0, 'm2':1, 'M2':2, 'A2':3,
                               'd3':3, 'm3':3, 'M3':4, 'A3':5, 'd4':4, 'P4':5,
@@ -163,6 +174,7 @@ class Chord():
                      'sus4': ['R', 'P5', 'P8', 'P4']}
 
     def __init__(self, root, chord_type='M'):
+        self.root_note = root
         self.notes = []
 
         try:
