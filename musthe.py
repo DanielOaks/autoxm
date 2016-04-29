@@ -5,6 +5,7 @@
 Copyright (c) 2014 Gonzalo Ciruelos <gonzalo.ciruelos@gmail.com>
 """
 
+import math
 import re
 
 
@@ -58,51 +59,90 @@ class Note():
         else:
             self.octave = int(self.octave[0])
 
-        self.note_id = {'C':0, 'D':2, 'E':4, 'F':5, 'G':7, 'A':9, 'B':11}[self.tone]
+    @property
+    def note_id(self):
+        note_id = {'C':0, 'D':2, 'E':4, 'F':5, 'G':7, 'A':9, 'B':11}[self.tone]
         for change in self.accidental:
-            if change == '#': self.note_id += 1
-            elif change == 'b': self.note_id -= 1
-        self.note_id %= 12
+            if change == '#':
+                note_id += 1
+            elif change == 'b':
+                note_id -= 1
+        note_id %= 12
+
+        return note_id
+
+    def __sub__(self, interval):
+        if isinstance(interval, int):
+            return self._add_semitones(interval * -1)
+        else:
+            raise Exception('Cannot subtract '+type(interval)+' from a note.')
 
     def __add__(self, interval):
-        if not isinstance(interval, Interval):
+        if isinstance(interval, Interval):
+            return self._add_interval(interval.semitones, interval.number)
+        elif isinstance(interval, int):
+            return self._add_semitones(interval)
+        else:
             raise Exception('Cannot add '+type(interval)+' to a note.')
 
+    def _add_semitones(self, semitones):
+        changed_octaves = math.floor(semitones / 12)
+        changed_note_id = semitones % 12
+
+        new_octave = self.octave + changed_octaves
+        new_note_id = self.note_id + changed_note_id
+
+        while new_note_id > 11:
+            new_octave += 1
+            new_note_id -= 12
+        while new_note_id < 0:
+            new_octave -= 1
+            new_note_id += 12
+
+        tones = 'CCDDEFFGGAAB'
+        tone = tones[new_note_id]
+        accidental = '#' * (new_note_id - tones.index(tone))
+
+        return Note(tone + accidental + str(new_octave))
+
+    def _add_interval(self, semitones, number):
         # * _old_note is the index in the list of the old note tone.
         # * new_note_tone is calculated adding the interval_number-1 because
         # you have start counting in the current tone. e.g. the fifth of
         # E is: (E F G A) B.
         _old_tone = 'CDEFGABCDEFGABCDEFGAB'.index(self.tone)
         # Fixing Issue #7: Note('Ab')+Interval('m3') --> Exception
-        if self.tone == 'A' and self.accidental.startswith('b') and interval.number == 3 and interval.semitones == 3:
+        if self.tone == 'A' and self.accidental.startswith('b') and number == 3 and semitones == 3:
             new_note_tone = 'B'
         else:
-            new_note_tone = 'CDEFGABCDEFGABCDEFGAB'[_old_tone+interval.number-1]
+            new_note_tone = 'CDEFGABCDEFGABCDEFGAB'[_old_tone + number - 1]
 
         # %12 because it wraps in B->C and starts over.
-        new_note_id = (self.note_id+interval.semitones)%12
+        new_note_id = (self.note_id + semitones) % 12
 
         # First calculates the note, and then the difference from the note
         # without accidentals, then adds proper accidentals.
         difference = new_note_id - {'C':0, 'D':2, 'E':4, 'F':5, 'G':7, 'A':9, 'B':11}[new_note_tone]
         # In some cases, like G##+m3, difference is -11, and it should be
         # 1, so this corrects the error.
-        if abs(difference)>3:
+        if abs(difference) > 3:
             difference = difference + 12
 
-        if difference<0: accidental = 'b'*abs(difference)
-        elif difference>0: accidental = '#'*abs(difference)
-        else: accidental = ''
-
+        if difference < 0:
+            accidental = 'b' * abs(difference)
+        elif difference > 0:
+            accidental = '#' * abs(difference)
+        else:
+            accidental = ''
 
         # it calculates how many times it wrapped around B->C and adds.
-        new_note_octave = (self.note_id+interval.semitones)//12+self.octave
+        new_note_octave = (self.note_id + semitones) // 12 + self.octave
         # corrects cases like B#, B##, B### and A###.
         # http://en.wikipedia.org/wiki/Scientific_pitch_notation#C-flat_and_B-sharp_problems
-        if new_note_tone+accidental in ['B#', 'B##', 'B###', 'A###']:
+        if new_note_tone + accidental in ['B#', 'B##', 'B###', 'A###']:
             new_note_octave -= 1
 
-        return Note(new_note_tone+accidental+str(new_note_octave))
+        return Note(new_note_tone + accidental + str(new_note_octave))
 
     def frequency(self):
         """
@@ -124,7 +164,7 @@ class Note():
         return self.tone+self.accidental
 
     def __eq__(self, other):
-        return self.scientific_notation() == other.scientific_notation()
+        return self.octave == other.octave and self.note_id == other.note_id
 
     def copy(self):
         return Note(self.scientific_notation())
@@ -208,6 +248,12 @@ class Chord():
             return False
         else:
             return all(self.notes[i] == other.notes[i] for i in range(len(self.notes)))
+
+    def __contains__(self, note):
+        for current_note in self.notes:
+            if current_note.note_id == note.note_id:
+                return True
+        return False
 
 if __name__ == '__main__':
     add = Note('Ab')+Interval('m3')

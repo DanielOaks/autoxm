@@ -807,8 +807,9 @@ class StrategyBase:
         self.generators = []
         self.patterns = []
         self.channels_used = 0
-        self.key = key
+        self.base_note = key
         self.scale = scale_name
+        self.key = scale(key, scale_name)
 
     def add_generator(self, generator):
         self.generators.append([self.channels_used, generator])
@@ -836,13 +837,13 @@ class MainStrategy(StrategyBase):
 
     def new_chord_sequence(self):
         self.chord_sequence = random.choice([
-            Chord(self.key),
-            Chord(self.key, chord_type='open5'),
+            Chord(self.base_note),
+            Chord(self.base_note, chord_type='open5'),
         ])
 
         self.chord_sequence_2 = random.choice([
-            Chord(self.key + Interval('M3')),
-            Chord(self.key + Interval('m3'), chord_type='open5'),
+            Chord(self.base_note + Interval('M3')),
+            Chord(self.base_note + Interval('m3'), chord_type='open5'),
         ])
 
     def get_pattern(self):
@@ -973,6 +974,159 @@ class DrumsGenerator(GeneratorBase):
                     pattern.rows[current_row].set_note(kick_channel, self.kick.note, self.kick, 100)
 
                 did_kick = not did_kick
+
+
+class AmbientMelodyGenerator(GeneratorBase):
+    MOTIF_PROSPECTS = [
+        # 1-steps
+        [1],
+        [2],
+        [3],
+
+        # 2-steps
+        [1,3],
+        [2,3],
+        [2,4],
+
+        # niceties
+        [5,7],
+        [5,12],
+        [7,12],
+        [7],
+        [5],
+        [12],
+
+        # 3-chords
+        [3,7],
+        [4,7],
+
+        # 4-chords
+        [3,7,10],
+        [3,7,11],
+        [4,7,10],
+        [4,7,11],
+
+        # turns and stuff
+        [1,0],
+        [2,0],
+        [1,-1,0],
+        [1,-2,0],
+        [2,-1,0],
+        [2,-2,0],
+    ]
+
+    def __init__(self, instrument):
+        super().__init__(instrument)
+        self.beatrow = 2**random.randint(2, 3)
+
+    def apply_notes(self, channel, pattern, strategy, rhythm, block_start, block_end, key, chord):
+        base_note = chord.root_note
+        if block_start == 0:
+            self.lq = base_note
+            self.ln = None
+            self.mq = []
+            self.nq = []
+
+        pattern.rows[block_start].set_note(channel, self.lq, self.instrument, 100)
+        self.nq.append(block_start)
+        self.ln = self.lq
+
+        stabbing = False
+
+        row = block_start
+        while row < block_start + block_end:
+            if channel in pattern.rows[row].notes and pattern.rows[row].notes[channel].note:
+                self.nq.append(row)
+
+                row += self.beatrow
+                continue
+
+            q = 60
+
+            if self.mq:
+                if stabbing or random.random() < 0.9:
+                    note = self.mq.pop(0)
+                    self.ln = note
+                    pattern.rows[row].set_note(channel, note, self.instrument, 100)
+                    self.nq.append(row)
+
+                    if not self.mq:
+                        self.lq = note
+
+                    if random.random() < 0.2 or stabbing:
+                        row += self.beatrow // 2
+                        stabbing = not stabbing
+                    else:
+                        row += self.beatrow
+                else:
+                    row += self.beatrow
+            elif row - block_start >= 2 * self.beatrow and random.random() < 0.3:
+                backstep = random.randint(3, min(10, row // (self.beatrow // 2))) * (self.beatrow // 2)
+
+                for i in range(backstep):
+                    if row - block_start >= block_end:
+                        break
+                    if channel in pattern.rows[row - backstep].notes:
+                        pattern.rows[row].notes[channel] = pattern.rows[row - backstep].notes[channel]
+                    note = pattern.rows[row].notes.get(channel)
+                    if note:
+                        self.ln = self.lq = note.note
+                    row += 1
+            else:
+                if len(self.nq) > 5:
+                    self.nq = self.nq[-5:]
+
+                while True:
+                    kk = False
+                    while True:
+                        rbi = random.choice(self.nq)
+                        rbn = pattern.rows[rbi].notes.get(channel, 0)
+                        if rbn:
+                            rbn = rbn.note
+                        if rbn:
+                            rbn_compare = rbn.xm_note
+                        else:
+                            rbn_compare = 0
+
+                        if self.ln and abs(rbn_compare - self.ln.xm_note) > 12:
+                            continue
+
+                        break
+
+                    m = None
+                    for j in range(20):
+                        m = random.choice(self.MOTIF_PROSPECTS)
+
+                        down = random.random() < (8.0 + (self.ln.xm_note - base_note.xm_note)) / 8.0 if self.ln else 0.5
+
+                        if down:
+                            m = [rbn - v for v in m]
+                        else:
+                            m = [rbn + v for v in m]
+
+                        if self.ln == m[0]:
+                            continue
+
+                        k = True
+                        for v in m:
+                            if not (v in chord and any([v.tone == note.tone and v.accidental == note.accidental for note in key])):
+                                k = False
+                                break
+
+                        if k:
+                            kk = True
+                            break
+
+                    if kk:
+                        break
+
+
+                if rbn != self.ln:
+                    m = [rbn] + m
+
+                self.mq += m
+
+                # repeat at same row
 
 
 # Name Generation
@@ -1127,6 +1281,10 @@ def autoxm(name=None, tempo=None):
     kick.note = Note('E2')
     mod.add_instrument(kick)
 
+    bass = KsInstrument('bass', length=2, fadeout=12, filtl=0.001, filth=0.97,
+                        noise_filth=0.02)#, relative_note=XM_RELATIVE_OCTAVEDOWN)
+    mod.add_instrument(bass)
+
     string = KsInstrument('string', length=2, fadeout=12, filtl=0.003, filth=0.92,
                           noise_filth=0.02)
     mod.add_instrument(string)
@@ -1145,8 +1303,9 @@ def autoxm(name=None, tempo=None):
 
     # generate basic pattern
     strategy = MainStrategy(Note('C4'), 'major', 0x80, 0x80)
-    strategy.add_generator(BassGenerator(string))
+    strategy.add_generator(BassGenerator(bass))
     strategy.add_generator(DrumsGenerator(kick, hatclosed, hatopen, snare))
+    #strategy.add_generator(AmbientMelodyGenerator(string))
     for i in range(strategy.channels_used - len(mod.channels)):
         mod.add_channel()
 
